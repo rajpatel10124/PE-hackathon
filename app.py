@@ -59,7 +59,7 @@ def call_llm(user_query: str, system_prompt: str) -> str:
         import google.generativeai as genai
 
         genai.configure(api_key=api_key)
-        model_name = os.getenv("MODEL_NAME") or os.getenv("GEMINI_MODEL") or "gemini-1.5-flash"
+        model_name = os.getenv("MODEL_NAME") or os.getenv("GEMINI_MODEL") or "gemini-3.8-flash"
         model = genai.GenerativeModel(
             model_name=model_name,
             system_instruction=system_prompt,

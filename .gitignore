@@ -19,9 +19,12 @@ dist/
 
 # Streamlit
 .streamlit/secrets.toml
+.agents/
+.claude/
 
 # IDE & OS
 .vscode/
 .idea/
 .DS_Store
 *.swp
+
