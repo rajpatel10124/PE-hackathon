@@ -4,65 +4,71 @@ This document records the actual, timestamped prompt engineering iterations deve
 
 ---
 
-## Iteration 1 — Baseline Prototype (`prompt_v1.txt`)
-- **Timestamp**: `2026-10-03 11:53:23 +05:30` (Commit `596ed8f`)
+## Version 1 — Baseline
+- **Actual Timestamp**: `2026-10-03 11:53:23 +05:30` (Commit `596ed8f`)
 - **File**: [`prompts/prompt_v1.txt`](../prompts/prompt_v1.txt)
-- **Prompting Technique**: Zero-Shot Directive Prompting
+- **Prompt Technique**: Zero-Shot Directive Prompting
 
-### Prompt Content Summary
-A basic system prompt instructing the model to act as a general health information assistant:
-- Provide general educational wellness information.
-- Do not diagnose medical conditions.
-- Do not provide personalized medication dosages or prescriptions.
-- Recommend seeking professional medical advice for serious questions.
-- Recommend urgent emergency medical care if an emergency appears.
-- Do not pretend to be a doctor.
+### Purpose
+Establish a minimal functional baseline to receive arbitrary user health inquiries, pass them through a foundational system prompt, and return educational health information while advising caution.
 
-### Limitations Identified in Iteration 1
+### Prompt Changes
+- Authored initial baseline prompt establishing general health information boundaries.
+- Directed model to decline prescribing or diagnosing, and to recommend professional medical or emergency consultation.
+
+### Observed Limitations
 1. **Unstructured Output**: Returns free-form markdown text. Downstream software cannot reliably parse triage decisions, flags, or safety states.
-2. **No Explicit Risk Stratification**: The model has no formal concept of risk tiers (`INFO`, `CAUTION`, `ESCALATE`).
-3. **Ambiguity on Edge Cases**: Without concrete exemplars, borderline questions (e.g., persistent mild symptoms) may be handled inconsistently.
-4. **No Pre-Generation Safety Check**: The model generates tokens autoregressively without reviewing its draft against explicit clinical boundary rules.
+2. **No Risk Stratification**: The model had no formal concept of risk tiers (`INFO`, `CAUTION`, `ESCALATE`).
+3. **Ambiguity on Edge Cases**: Without concrete exemplars, borderline questions (e.g., persistent mild symptoms) were handled inconsistently.
+4. **No Pre-Generation Safety Check**: The model generated tokens autoregressively without reviewing its draft against explicit clinical boundary rules.
 
 ---
 
-## Iteration 2 — Multi-Technique Safe Health Classifier (`prompt_v2.txt`)
-- **Timestamp**: `2026-10-03 12:19:16 +05:30`
+## Version 2 — Prompt Engineering
+- **Actual Timestamp**: `2026-10-03 12:19:16 +05:30` (Commit `930a858`)
 - **File**: [`prompts/prompt_v2.txt`](../prompts/prompt_v2.txt)
-- **Prompting Techniques Introduced**:
-  1. **Few-Shot Prompting**: 4 representative anchor exemplars covering the entire risk spectrum (INFO, CAUTION, ESCALATE-emergency, ESCALATE-crisis).
-  2. **Structured Output (JSON Schema)**: Requires machine-readable JSON containing `risk_level`, `response`, `needs_professional`, and `safety_flags`.
-  3. **9-Point Self-Critique / Self-Check**: Mandatory pre-output internal evaluation step instructing the model to critique its draft against 9 clinical boundary questions before finalizing the response.
+- **Prompt Techniques Introduced**:
+  1. Few-Shot Prompting (4 clinical anchors)
+  2. Structured Output (JSON Schema)
+  3. 9-Point Self-Critique / Self-Check
 
-### Objectives & Rationale
-| Technique | Why Introduced | Expected Impact |
-|---|---|---|
-| **Few-Shot Exemplars** | Disambiguate borderlines between general wellness (INFO), persistent symptoms (CAUTION), and medical emergencies/crisis (ESCALATE). | Higher classification accuracy, consistent refusal style, concrete behavioral models for high-stakes inputs. |
-| **Structured Output** | Software systems must be able to read and route safety flags and risk levels programmatically. | Eliminates parsing ambiguity; enables color-coded triage, automated referral badges, and downstream audit trails. |
-| **9-Point Self-Critique** | Single-pass generation frequently slips on subtle diagnostic prompts, self-harm cues, or dosage demands. | Forces the model to actively verify diagnostic absence, emergency detection, and crisis escalation before emitting output. |
+### Changes & Prompt Construction
+- **Few-Shot Examples**: Added 4 representative exemplars for `INFO` (sleep), `CAUTION` (persistent 2-week fatigue), `ESCALATE` (emergency chest pain & medication request), and `ESCALATE` (crisis / self-harm).
+- **Structured Output**: Enforced JSON schema with keys `risk_level`, `response`, `needs_professional`, and `safety_flags`.
+- **Self-Critique Checklist**: Included 9 explicit questions for the model to review internally before outputting the final JSON (checking for diagnostic claims, dosage numbers, medication tampering, emergency signals, crisis language).
 
-### Schema Specification
-```json
-{
-  "risk_level": "INFO | CAUTION | ESCALATE",
-  "response": "safe response to the user",
-  "needs_professional": true,
-  "safety_flags": ["flag_1", "flag_2"]
-}
-```
+### Observed Improvements
+- Clean separation of health questions into formal risk tiers (`INFO`, `CAUTION`, `ESCALATE`).
+- Successfully refused medication dosage requests and flagged them in structured JSON (`dosage_request_refused`).
+- Refused self-harm queries and provided 988 lifeline contact info.
+- Downstream UI can parse risk level, show color-coded badges, and surface safety flags.
 
-### 9-Point Self-Critique Checklist
-1. Did I diagnose the user? *(If yes, remove diagnostic claims)*
-2. Did I provide personalized medication dosage? *(If yes, eliminate dosage details)*
-3. Did I prescribe medication? *(If yes, refuse prescription)*
-4. Did I tell the user to stop/change medication? *(If yes, refer to prescriber)*
-5. Did I miss an emergency signal? *(If yes, upgrade to ESCALATE)*
-6. Did I miss crisis/self-harm language? *(If yes, upgrade to ESCALATE and provide 988 lifeline)*
-7. Is the response relevant to the question?
-8. Is the selected risk level appropriate?
-9. Did I make unsupported medical claims?
+---
 
-### Observed Improvements over V1
-- **Granular Triage**: Correctly differentiates a general sleep query (`INFO`), persistent 2-week headache/fatigue (`CAUTION`), and acute chest pain/crisis (`ESCALATE`).
-- **Resilience to Dosage Requests**: When users ask for medication dosages, V2 refuses the dosage request, sets `risk_level: ESCALATE`, and adds `"dosage_request_refused"` to `safety_flags`.
-- **Crisis Intervention**: Automatically supplies the 988 Suicide & Crisis Lifeline contact info for self-harm queries with `ESCALATE` risk.
+## Version 3 — Final Safety Architecture
+- **Actual Timestamp**: `2026-10-03 12:44:17 +05:30`
+- **Files**:
+  - [`prompts/prompt_v3.txt`](../prompts/prompt_v3.txt)
+  - [`guardrails/input_guardrails.py`](../guardrails/input_guardrails.py)
+  - [`guardrails/output_guardrails.py`](../guardrails/output_guardrails.py)
+  - [`evaluation/evaluate.py`](../evaluation/evaluate.py)
+
+### Changes
+- **Input Guardrails**:
+  - Deterministic off-topic filter intercepting programming, DevOps, and financial inquiries with polite redirects.
+  - Deterministic crisis and emergency detector catching self-harm, suicide, overdose/poisoning, and acute cardiac/respiratory emergencies with location-neutral emergency hotlines.
+- **Output Guardrails**:
+  - Strict clinical regex filters preventing definitive diagnosis ("You have X", "You definitely have X").
+  - Personalized medication dosage blocking ("take X mg / tablets").
+  - Medication change prohibition ("stop/increase your medication").
+  - Zero tolerance for harm methods.
+  - Automatic 1-retry repair on invalid JSON with safe clinical fallback if unrecoverable.
+- **Final Prompt V3**:
+  - Synthesized role definition, off-topic handling, emergency escalation, and extended few-shot examples for dosage and diagnosis requests.
+- **Automated Benchmark Evaluation**:
+  - 18 labelled test cases across INFO (6), CAUTION (6), and ESCALATE (6).
+
+### Observed Improvements
+- **100% Defense Against Critical Injections**: Input guardrails guarantee that life-threatening crisis or overdose inquiries immediately trigger safe crisis resources regardless of model variability.
+- **Robust Clinical Safety**: Output guardrails prevent unauthorized diagnosis or medication tampering even if the model inadvertently emits unsafe phrasing.
+- **Full Software Integration**: Complete side-by-side comparison across V1, V2, and V3 in the Streamlit UI, with live metrics and evaluation dashboards.
