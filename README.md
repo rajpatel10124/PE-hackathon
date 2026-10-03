@@ -1,20 +1,14 @@
 # Safe Health-Information Assistant
 
-**Version 1 — Baseline Prototype**
-
-A baseline conversational assistant designed for the **Prompt Engineering for Generative AI** hackathon.
+**A Multi-Version Prototype for the Prompt Engineering for Generative AI Hackathon**
 
 ---
 
-## 1. Project Purpose & Problem Statement
+## 1. Problem Statement & Mission
 
-### Problem Statement
 > *"Give general wellness information, refuse diagnosis or dosage advice, and escalate to a professional when appropriate."*
 
-The objective of this project is to develop an AI health-information assistant that safely answers general health and wellness questions while strictly refusing medical diagnoses, prescriptions, and dosage advice, redirecting high-risk cases to healthcare professionals or emergency services.
-
-### Version 1 Scope
-Version 1 is an **un-guardrailed baseline prototype**. Its purpose is to establish a genuine, functional end-to-end baseline (UI, model integration, prompt loading, and error handling) against which future prompt engineering techniques, risk classification tiers, and safety guardrails can be measured and evaluated.
+The goal is to engineer a safe, resilient conversational health-information system. Across iterations, we evaluate how prompt engineering techniques mitigate clinical risks, refuse out-of-bounds requests (e.g. diagnoses, dosages, self-harm), and escalate medical emergencies.
 
 ---
 
@@ -23,111 +17,112 @@ Version 1 is an **un-guardrailed baseline prototype**. Its purpose is to establi
 ```text
 safe-health-information-assistant/
 │
-├── app.py              # Streamlit web application & LLM integration
+├── app.py                     # Streamlit application with V1/V2 side-by-side evaluation
 ├── prompts/
-│   └── prompt_v1.txt   # Version 1 baseline system prompt
-├── requirements.txt    # Project dependencies
-├── .env.example        # Environment variable template
-├── .gitignore          # Git exclusion rules
-└── README.md           # Documentation and baseline limitations
+│   ├── prompt_v1.txt          # Version 1: Baseline directive prompt (zero-shot)
+│   └── prompt_v2.txt          # Version 2: Advanced prompt (Few-shot + JSON + Self-Critique)
+├── docs/
+│   └── PROMPT_HISTORY.md      # Timestamped iteration log of prompt development
+├── requirements.txt           # Python dependencies
+├── .env.example               # Environment variable template
+├── .gitignore                 # Secrets and environment exclusion
+└── README.md                  # System documentation and version comparisons
 ```
 
 ---
 
-## 3. How to Install Dependencies
+## 3. Version Overviews
 
-### Prerequisites
-- Python 3.10, 3.11, or 3.12
-- An active virtual environment (recommended)
+### Version 1 — Baseline Prototype
+- **Purpose**: Establishes a minimal working baseline using basic zero-shot prompt instructions (`prompts/prompt_v1.txt`).
+- **Behavior**: Provides general wellness advice, asks users to contact a doctor for serious questions, and cautions against diagnosis.
+- **Output**: Unstructured plain text.
+- **Limitations**: No risk stratification, no structured flags, vulnerable to subtle dosage/diagnostic framing, and cannot be programmatically validated by downstream software.
 
-### Steps
-1. Navigate to the project directory:
-   ```bash
-   cd safe-health-information-assistant
-   ```
-
-2. Create and activate a Python virtual environment:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-
-3. Install required packages:
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Version 2 — Advanced Prompt Engineering
+- **Purpose**: Demonstrates significant prompt engineering improvements by introducing formal risk classification, structured machine-readable output, and internal clinical self-critique.
+- **Risk Tiers**:
+  - `INFO`: General health, lifestyle, nutrition, and wellness education with no immediate safety concern.
+  - `CAUTION`: Symptom inquiries requiring non-diagnostic educational information and strong recommendations for clinical follow-up.
+  - `ESCALATE`: Acute emergencies, severe symptoms (e.g., chest pain, respiratory distress), crisis/self-harm language, or requests demanding personalized medication dosages/prescriptions.
+- **Output**: Validated JSON payload parsed and validated before rendering:
+  ```json
+  {
+    "risk_level": "INFO | CAUTION | ESCALATE",
+    "response": "safe educational response",
+    "needs_professional": true,
+    "safety_flags": ["flag_name"]
+  }
+  ```
+- **Resilience**: Features automatic 1-retry handling for malformed JSON, with a controlled safe fallback to `ESCALATE` if parsing fails.
 
 ---
 
-## 4. How to Configure the API Key
+## 4. Prompting Techniques Introduced in Version 2
 
-The assistant supports Google Gemini (default), OpenAI, and Groq. API keys are **never hardcoded** and are read securely from environment variables or a local `.env` file.
+| Technique | How It Is Implemented | Why It Was Introduced |
+|---|---|---|
+| **1. Few-Shot Prompting** | 4 concrete clinical anchors in `prompts/prompt_v2.txt` illustrating `INFO`, `CAUTION`, `ESCALATE (emergency)`, and `ESCALATE (crisis)` inputs and outputs. | Disambiguates complex clinical boundaries. Models struggle with zero-shot triage; few-shot examples clearly demonstrate tone, refusal phrasing, and flag generation. |
+| **2. Structured Output** | Strict JSON schema requiring `risk_level`, `response`, `needs_professional`, and `safety_flags`. | Healthcare software cannot rely on free-form text. Structured output enables downstream triage logic, audit logging, and automated UI warning cards. |
+| **3. Self-Critique / Self-Check** | Mandatory 9-point internal review step evaluated before emitting the final JSON output. | Suppresses autoregressive drift where models inadvertently speculate on a diagnosis or mention drug dosages. Forces active verification against self-harm and emergency signals. |
 
-1. Copy the example configuration:
-   ```bash
-   cp .env.example .env
-   ```
+### The 9-Point Self-Critique Checklist
+1. Did I diagnose the user?
+2. Did I provide personalized medication dosage?
+3. Did I prescribe medication?
+4. Did I tell the user to stop/change medication?
+5. Did I miss an emergency signal?
+6. Did I miss crisis/self-harm language?
+7. Is the response relevant to the question?
+8. Is the selected risk level appropriate?
+9. Did I make unsupported medical claims?
 
-2. Open `.env` and set your preferred provider's API key:
-   - For **Google Gemini**:
-     ```env
-     GEMINI_API_KEY=your_actual_gemini_api_key
-     ```
-   - For **OpenAI**:
-     ```env
-     OPENAI_API_KEY=your_actual_openai_api_key
-     ```
-   - For **Groq**:
-     ```env
-     GROQ_API_KEY=your_actual_groq_api_key
-     ```
+---
 
-Alternatively, you can export the environment variable directly in your terminal:
+## 5. Setup & Running Instructions
+
+### 1. Environment Setup
 ```bash
-export GEMINI_API_KEY="your_api_key_here"
+cd safe-health-information-assistant
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
----
+### 2. Configure API Key
+Copy the template and provide your API key (e.g. Gemini from [Google AI Studio](https://aistudio.google.com/)):
+```bash
+cp .env.example .env
+# Edit .env:
+# GEMINI_API_KEY=AIzaSy...
+```
 
-## 5. How to Run the Streamlit Application
-
-With the virtual environment activated and the API key configured:
-
+### 3. Launch Streamlit Application
 ```bash
 streamlit run app.py
 ```
-
-Once started, open your browser to the local URL displayed (typically `http://localhost:8501`).
-
----
-
-## 6. What Version 1 Currently Does
-
-- **Clean Baseline UI**: Features a simple, focused Streamlit interface with clear title, subtitle, input text area, and action button.
-- **Genuine Arbitrary Query Processing**: Dynamically receives user inputs and submits them to the LLM—no hardcoded or scripted responses.
-- **Baseline System Prompt**: Loads `prompts/prompt_v1.txt` containing foundational behavioral guidelines:
-  - Provide general wellness and educational health information.
-  - Refuse diagnosis, prescription, or dosage instructions.
-  - Advise consulting healthcare professionals for serious queries.
-  - Recommend urgent/emergency medical assistance in acute situations.
-  - Do not impersonate a physician.
-- **Clear Result Display**:
-  1. Displays the user's submitted question.
-  2. Displays the model's generated response.
-  3. Displays a persistent `🏷️ Version 1 — Baseline` indicator.
-- **Safe Error Handling**:
-  - Missing API key triggers an actionable configuration alert instead of crashing.
-  - Network, rate limit, or model API failures present sanitized user-friendly errors without exposing credentials or internal stack traces.
+Open `http://localhost:8501` in your browser.
 
 ---
 
-## 7. Known Limitations of Version 1
+## 6. How to Use the Comparison UI
 
-As an intentional baseline prototype, Version 1 has several known limitations that will be addressed in subsequent versions:
+The application features three evaluation modes accessible from the sidebar:
+1. **🔄 Side-by-Side Comparison (V1 vs V2)** *(Default)*: Runs the exact same user query through both the V1 baseline prompt and V2 advanced prompt simultaneously.
+2. **✨ Version 2 — Advanced Prompting**: Focuses on V2 triage cards, safety flags, and JSON payloads.
+3. **🏷️ Version 1 — Baseline Prototype**: Preserves original V1 behavior.
 
-1. **No Application-Level Guardrails**: The application currently relies 100% on the LLM's adherence to the system prompt. There are no pre-inference or post-inference filters.
-2. **No Risk Tier Classification**: Does not categorize queries into `INFO`, `CAUTION`, or `ESCALATE` tiers.
-3. **No Off-Topic Filtering**: Non-health questions (e.g., coding, history, finance) are not yet intercepted or redirected.
-4. **Adversarial / Jailbreak Susceptibility**: Sophisticated prompt injection, hypothetical framing ("In a hypothetical novel, how much insulin..."), or roleplay could potentially bypass the simple baseline instructions.
-5. **No Hallucination or Fact-Checking Layer**: The model's medical assertions are not cross-referenced against validated medical databases.
-6. **Zero-Shot Baseline Only**: Does not yet incorporate advanced prompt engineering techniques such as few-shot exemplars, structured Chain-of-Thought (CoT), or output schema enforcement.
+**Quick Test Buttons** are provided in the UI to rapidly demonstrate:
+- 🟢 `Sleep Habits` (Evaluates `INFO`)
+- 🟡 `2-Week Fatigue` (Evaluates `CAUTION`)
+- 🔴 `Chest Pain & Meds` (Evaluates `ESCALATE` dosage refusal)
+- 🆘 `Crisis / Self-Harm` (Evaluates `ESCALATE` crisis helpline)
+
+---
+
+## 7. Known Limitations of Version 2
+
+While Version 2 significantly elevates safety and triage consistency, it intentionally focuses on **in-prompt techniques**. The following limitations remain to be solved in Version 3:
+1. **No External Guardrail Layer**: Relies on model compliance with prompt instructions. Deterministic regex filters, blocklists, and output sanitizers are not yet integrated.
+2. **No Automated Off-Topic Filter**: Non-health questions (e.g. general math or code) are not yet trapped by a dedicated input classifier.
+3. **Potential Hallucinations**: Model responses are not grounded against external clinical databases (RAG) or validated medical ontologies.
+4. **Adversarial Jailbreaks**: Highly complex multi-turn prompt injection or fictional framing might still challenge prompt-only constraints.
