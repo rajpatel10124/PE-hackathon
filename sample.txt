@@ -1,6 +1,2 @@
-<<<<<<< HEAD
 this is final
-=======
-sample
-this is not sample one we need to create one another branch for the commit
->>>>>>> 42160df2280413e26d713aaf3ec680540a2d970c
+
