@@ -3,3 +3,6 @@ python-dotenv>=1.0.0
 google-generativeai>=0.7.0
 openai>=1.12.0
 hello
+
+
+this is not the same it will not give conflict
